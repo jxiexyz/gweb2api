@@ -48,6 +48,16 @@ func ExtractTextsFromLine(line string) []string {
 	}
 
 	if len(inner) <= 4 || inner[4] == nil {
+		// Fallback for video generation status frames: [null, [conv, resp], {"7": ["I'm generating...", ...]}]
+		if len(inner) > 2 && inner[2] != nil {
+			if m, ok := inner[2].(map[string]any); ok {
+				if v7, ok := m["7"].([]any); ok && len(v7) > 0 {
+					if s, ok := v7[0].(string); ok && s != "" {
+						return []string{s}
+					}
+				}
+			}
+		}
 		return nil
 	}
 
