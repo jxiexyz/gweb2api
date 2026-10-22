@@ -247,6 +247,22 @@ func (c *Client) Generate(prompt string, opt ModelOptions, fileRefs []string) (s
 		} else {
 			if err := c.triageStatus(resp); err != nil {
 				_ = resp.Body.Close()
+				if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusFound || resp.StatusCode == http.StatusForbidden {
+					c.Cookies.MarkFailed(cookieInfo.Cookie, 15*time.Minute)
+					if c.Cookies.TotalAccounts() > 1 {
+						cookieInfo, _ = c.Cookies.Load()
+						headers = c.buildHeaders()
+						if opt.IsVideo {
+							headers.Set(ModelHeaderKey, BuildVideoHeader(reqUUID, c.CurrentBL()))
+							headers.Set(HeaderJspb89, "[0]")
+							headers.Set(HeaderJspb90, "[0,0,0]")
+						} else if modelHdr != "" {
+							headers.Set(ModelHeaderKey, modelHdr)
+							headers.Set(HeaderJspb89, "[0]")
+							headers.Set(HeaderJspb90, "[0,0,0]")
+						}
+					}
+				}
 				// 405 = BL expired. Refresh once and retry without consuming an attempt.
 				if !blRefreshed && resp.StatusCode == http.StatusMethodNotAllowed {
 					blRefreshed = true
@@ -272,6 +288,25 @@ func (c *Client) Generate(prompt string, opt ModelOptions, fileRefs []string) (s
 					if err != nil {
 						lastErr = &UpstreamError{Kind: "bard", Msg: err.Error()}
 					} else {
+						textLower := strings.ToLower(text)
+						if strings.Contains(textLower, "getting a lot of requests") || strings.Contains(textLower, "usage limit reached") || strings.Contains(textLower, "can't create it right now") {
+							c.Cookies.MarkFailed(cookieInfo.Cookie, 15*time.Minute)
+							if c.Cookies.TotalAccounts() > 1 && attempt < c.Cfg.RetryAttempts-1 {
+								c.Logf("[cookie-pool] Account quota limit reached, falling over to next account...")
+								cookieInfo, _ = c.Cookies.Load()
+								headers = c.buildHeaders()
+								if opt.IsVideo {
+									headers.Set(ModelHeaderKey, BuildVideoHeader(reqUUID, c.CurrentBL()))
+									headers.Set(HeaderJspb89, "[0]")
+									headers.Set(HeaderJspb90, "[0,0,0]")
+								} else if modelHdr != "" {
+									headers.Set(ModelHeaderKey, modelHdr)
+									headers.Set(HeaderJspb89, "[0]")
+									headers.Set(HeaderJspb90, "[0,0,0]")
+								}
+								continue
+							}
+						}
 						return text, nil
 					}
 				}
