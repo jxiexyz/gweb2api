@@ -83,7 +83,7 @@ func BuildBody(prompt string, modelID, thinkMode int, fileRefs []string, extra m
 		// Video payload flags for Omni Flash (Google One AI Premium/Plus accounts):
 		inner[17] = []any{[]any{0}}
 		inner[30] = []any{4, 16, 19}
-		inner[41] = []any{1}
+		inner[41] = []any{2}
 		inner[79] = 6
 		inner[80] = 1
 		inner[91] = 1
