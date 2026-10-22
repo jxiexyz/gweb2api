@@ -139,6 +139,10 @@ func (c *Client) UpdateBLIfNeeded() (string, bool, error) {
 	return newBL, true, nil
 }
 
+func (c *Client) BuildHeaders() http.Header {
+	return c.buildHeaders()
+}
+
 func (c *Client) buildHeaders() http.Header {
 	cookieInfo, _ := c.Cookies.Load()
 	authUser := c.Cfg.AuthUser
