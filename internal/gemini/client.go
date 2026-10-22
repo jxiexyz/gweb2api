@@ -328,17 +328,15 @@ func (c *Client) Generate(prompt string, opt ModelOptions, fileRefs []string) (G
 						textLower := strings.ToLower(parsed.Text)
 						isQuotaOrRefusal := false
 						if opt.IsVideo {
-							if strings.Contains(textLower, "can't") ||
-								strings.Contains(textLower, "cant") ||
-								strings.Contains(textLower, "cannot") ||
-								strings.Contains(textLower, "limit") ||
-								strings.Contains(textLower, "signed out") ||
-								strings.Contains(textLower, "sign in") ||
-								strings.Contains(textLower, "not available") ||
-								strings.Contains(textLower, "tidak dapat") ||
-								strings.Contains(textLower, "tidak bisa") ||
-								strings.Contains(textLower, "search for images") ||
-								(!strings.Contains(textLower, "generating") && !strings.Contains(textLower, "membuat video") && !strings.Contains(textLower, "video anda")) {
+							if strings.Contains(textLower, "usage limit") ||
+								strings.Contains(textLower, "limit resets") ||
+								strings.Contains(textLower, "can't create it right now") ||
+								strings.Contains(textLower, "can't seem to create") ||
+								strings.Contains(textLower, "are you signed in") ||
+								strings.Contains(textLower, "create more videos as soon as") ||
+								strings.Contains(textLower, "search for images, but can't create") ||
+								strings.Contains(textLower, "search for images, but can't seem") ||
+								strings.Contains(textLower, "tidak dapat membuat") {
 								isQuotaOrRefusal = true
 							}
 						} else {
@@ -351,6 +349,7 @@ func (c *Client) Generate(prompt string, opt ModelOptions, fileRefs []string) (G
 						}
 
 						if isQuotaOrRefusal {
+							c.Logf("[cookie-pool] Quota refusal detected (text=%q)", parsed.Text[:min(len(parsed.Text), 120)])
 							c.Cookies.MarkFailed(cookieInfo.Cookie, 15*time.Minute)
 							if c.Cookies.TotalAccounts() > 1 && attempt < maxAttempts-1 {
 								c.Logf("[cookie-pool] Account quota/feature limit reached, falling over to next account (%d/%d)...", attempt+1, maxAttempts)

@@ -334,6 +334,7 @@ func (c *Client) resolveModelHeader(opt ModelOptions, reqUUID string) (string, i
 // for Omni Flash video generation on Google One AI Premium (Plus) accounts:
 // [1,null,null,null,null,null,null,0,[4,5,6,8,16,19,20,4,5,6,8,16,19,20],null,null,4,null,null,1,1,"<UUID>",[<BL_VALUE>],null,null]
 func BuildVideoHeader(reqUUID, bl string) string {
+	ts := time.Now().Unix()
 	raw := []any{
 		1,
 		nil,
@@ -349,12 +350,12 @@ func BuildVideoHeader(reqUUID, bl string) string {
 		4,
 		nil,
 		nil,
-		1,
+		6,
 		1,
 		reqUUID,
 		[]string{bl},
 		nil,
-		nil,
+		[]any{[]any{1, 74899999}, []any{ts, 2000000}},
 	}
 	b, _ := json.Marshal(raw)
 	return string(b)

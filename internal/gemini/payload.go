@@ -84,7 +84,7 @@ func BuildBody(prompt string, modelID, thinkMode int, fileRefs []string, extra m
 		inner[17] = []any{[]any{0}}
 		inner[30] = []any{4, 16, 19}
 		inner[41] = []any{1}
-		inner[79] = 1
+		inner[79] = 6
 		inner[80] = 1
 		inner[91] = 1
 		inner[98] = 1
