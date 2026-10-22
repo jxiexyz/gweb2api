@@ -1,4 +1,4 @@
-<!-- markdown-translator:62dba9eec309a74d88006d57d713a432a95bf4677b56668264e4322808769359 -->
+<!-- markdown-translator:c84f6e14e2a9d01345399037435f815a1af0e4a9d5c759f0a6198a89ff8fc964 -->
 # Gemini-web2api
 
 <p align="center">
@@ -113,7 +113,7 @@ docker run -d --name gemini-web2api -p 8081:8081 -v ./config.json:/app/config.js
 docker compose up -d
 ```
 
-> **笔记**：如果您得到空回复（`content: null`）使用 Docker 的默认桥接网络，切换到主机网络：`docker run --network host ...`或添加`network_mode: host`在您的撰写文件中。这是由 Gemini 的上游拒绝来自某些 Docker NAT IP 范围的请求造成的。
+> **笔记**：如果您得到空回复（`content: null`）使用 Docker 的默认桥接网络，切换到主机网络：`docker run --network host ...`或添加`network_mode: host`在您的撰写文件中。这是由 Gemini 的上游拒绝来自某些 Docker NAT IP 范围的请求引起的。
 
 ## 客户端配置
 
@@ -173,7 +173,7 @@ gemini
 ## 可用型号
 
 |型号|描述 |输出|
-| -------------------------------- | ------------------------------------------------------------------ | --------------- |
+| -------------------------------- | ------------------------------------------------------------------ | ---------------- |
 |`gemini-4-argon`|复杂任务的前沿模型（需要 Pro）|**~20k+ 字符**|
 |`argon`,`gemini-4`| Gemini-4-argon 的别名 |**~20k+ 字符**|
 |`gemini-3.8-flash`|最新全能机型（Gemini 3.8 Flash）|约 12k 个字符 |
@@ -185,6 +185,8 @@ gemini
 |`gemini-3.1-pro`|高级数学和代码（需要 Pro cookie）|约 12k 个字符 |
 |`gemini-auto`|汽车选型|变化 |
 |`gemini-flash-lite`|最快的答案，轻量级 | 〜10k 个字符 |
+|`gemini-video`|视频生成（Omni Flash、异步）|视频回应 |
+|`video`|双子座视频的别名 |视频回应 |
 
 ### 思考深度
 
