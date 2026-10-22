@@ -23,7 +23,7 @@ func CleanText(text string, strip bool) string {
 }
 
 func ExtractTextsFromLine(line string) []string {
-	if !strings.Contains(line, `"wrb.fr"`) || len(line) < 200 {
+	if !strings.Contains(line, `"wrb.fr"`) || len(line) < 30 {
 		return nil
 	}
 
@@ -38,7 +38,7 @@ func ExtractTextsFromLine(line string) []string {
 	}
 
 	innerStr, ok := firstElem[2].(string)
-	if !ok || len(innerStr) < 50 {
+	if !ok || len(innerStr) < 10 {
 		return nil
 	}
 

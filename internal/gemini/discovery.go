@@ -329,3 +329,34 @@ func (c *Client) resolveModelHeader(opt ModelOptions, reqUUID string) (string, i
 	}
 	return string(b), targetNum
 }
+
+// BuildVideoHeader constructs the x-goog-ext-525001261-jspb header value required
+// for Omni Flash video generation on Google One AI Premium (Plus) accounts:
+// [1,null,null,null,null,null,null,0,[4,5,6,8,16,19,20,4,5,6,8,16,19,20],null,null,4,null,null,1,1,"<UUID>",[<BL_VALUE>],null,null]
+func BuildVideoHeader(reqUUID, bl string) string {
+	raw := []any{
+		1,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		0,
+		[]int{4, 5, 6, 8, 16, 19, 20, 4, 5, 6, 8, 16, 19, 20},
+		nil,
+		nil,
+		4,
+		nil,
+		nil,
+		1,
+		1,
+		reqUUID,
+		[]string{bl},
+		nil,
+		nil,
+	}
+	b, _ := json.Marshal(raw)
+	return string(b)
+}
+

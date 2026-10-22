@@ -11,14 +11,27 @@ import (
 // Mode corresponds to the Gemini upstream mode ID, Think specifies the default reasoning depth,
 // and Extra contains index-based overrides for Gemini's sparse RPC request array.
 type Model struct {
-	Mode   int         `json:"mode"`
-	Think  int         `json:"think"`
-	Desc   string      `json:"desc"`
-	Header string      `json:"header,omitempty"`
-	Extra  map[int]any `json:"extra,omitempty"`
+	Mode    int         `json:"mode"`
+	Think   int         `json:"think"`
+	Desc    string      `json:"desc"`
+	Header  string      `json:"header,omitempty"`
+	Extra   map[int]any `json:"extra,omitempty"`
+	IsVideo bool        `json:"is_video,omitempty"`
 }
 
 var MODELS = map[string]Model{
+	"gemini-video": {
+		Mode:    1,
+		Think:   0,
+		Desc:    "Video generation (Omni Flash, async); Google One AI Premium (Plus) compatible",
+		IsVideo: true,
+	},
+	"video": {
+		Mode:    1,
+		Think:   0,
+		Desc:    "Alias for gemini-video",
+		IsVideo: true,
+	},
 	"gemini-4-argon": {
 		Mode:   8,
 		Think:  4,
@@ -97,6 +110,7 @@ type Resolved struct {
 	Header   string
 	Fallback bool
 	Extra    map[int]any
+	IsVideo  bool
 }
 
 const DefaultModelName = "gemini-3.6-flash"
@@ -141,5 +155,6 @@ func Resolve(modelName, defaultName string) (Resolved, error) {
 		Header:   cfg.Header,
 		Fallback: fallback,
 		Extra:    cfg.Extra,
+		IsVideo:  cfg.IsVideo,
 	}, nil
 }

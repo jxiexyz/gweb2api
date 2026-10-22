@@ -65,6 +65,7 @@ func (a *App) handleChat(w http.ResponseWriter, r *http.Request) {
 		ThinkMode:   resolved.Think,
 		ModelHeader: resolved.Header,
 		Extra:       resolved.Extra,
+		IsVideo:     resolved.IsVideo,
 	}
 
 	cid := fmt.Sprintf("chatcmpl-%s", format.RandHex(12))

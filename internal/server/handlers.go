@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 
+	"github.com/ikhsan3adi/gemini-web2api/internal/app"
 	"github.com/ikhsan3adi/gemini-web2api/internal/models"
 )
 
@@ -57,3 +58,12 @@ func (a *App) handleGoogleModels(w http.ResponseWriter, r *http.Request) {
 		"models": modelList,
 	})
 }
+
+func (a *App) handleCreateVideo(w http.ResponseWriter, r *http.Request) {
+	app.HandleCreateVideo(a.Gem, w, r)
+}
+
+func (a *App) handleVideoItem(w http.ResponseWriter, r *http.Request) {
+	app.HandleVideoItem(w, r)
+}
+

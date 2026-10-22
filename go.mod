@@ -1,6 +1,6 @@
 module github.com/ikhsan3adi/gemini-web2api
 
-go 1.26.5
+go 1.25.0
 
 require (
 	github.com/bogdanfinn/fhttp v0.6.8

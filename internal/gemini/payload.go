@@ -34,12 +34,16 @@ func applyPersistenceFlags(inner []any, cfg config.Config) {
 // BuildBody constructs the form-encoded payload (`f.req`) expected by Gemini's frontend RPC endpoint.
 // Gemini web uses a sparse JSON array (102 elements) where specific indices represent payload parameters:
 // - Index 0: Prompt text and image attachment references
-// - Index 17: Reasoning/thinking mode depth
-// - Index 41: Persistence/temporary chat mode (1=temporary, 2=persistent)
+// - Index 17: Reasoning/thinking mode depth ([[0]] for think mode OFF)
+// - Index 30: Feature flags ([4] for text, [4, 16, 19] for video)
+// - Index 41: Persistence/temporary chat mode ([1]=temporary, [2]=persistent)
 // - Index 45: Additional persistence flag (1 when temporary)
 // - Index 59: Request UUID
-// - Index 79: Target model mode ID
-func BuildBody(prompt string, modelID, thinkMode int, fileRefs []string, extra map[int]any, cfg config.Config) string {
+// - Index 79: Target model mode ID (1 for Flash)
+// - Index 80: Video generation flag (1 for video)
+// - Index 91: Video generation flag (1 for video)
+// - Index 98: Video generation flag (1 for video)
+func BuildBody(prompt string, modelID, thinkMode int, fileRefs []string, extra map[int]any, cfg config.Config, isVideo ...bool) string {
 	inner := make([]any, GeminiPayloadSize)
 
 	if len(fileRefs) > 0 {
@@ -73,6 +77,17 @@ func BuildBody(prompt string, modelID, thinkMode int, fileRefs []string, extra m
 		if k >= 0 && k < len(inner) {
 			inner[k] = v
 		}
+	}
+
+	if len(isVideo) > 0 && isVideo[0] {
+		// Video payload flags for Omni Flash (Google One AI Premium/Plus accounts):
+		inner[17] = []any{[]any{0}}
+		inner[30] = []any{4, 16, 19}
+		inner[41] = []any{1}
+		inner[79] = 1
+		inner[80] = 1
+		inner[91] = 1
+		inner[98] = 1
 	}
 
 	innerJSON, _ := json.Marshal(inner)

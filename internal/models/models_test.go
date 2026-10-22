@@ -13,6 +13,7 @@ func TestResolve(t *testing.T) {
 		wantThink    int
 		wantHeader   string
 		wantFallback bool
+		wantVideo    bool
 		wantErr      bool
 	}{
 		{
@@ -92,6 +93,26 @@ func TestResolve(t *testing.T) {
 			wantErr:      false,
 		},
 		{
+			input:        "gemini-video",
+			defaultName:  "gemini-3.6-flash",
+			wantName:     "gemini-video",
+			wantMode:     1,
+			wantThink:    0,
+			wantFallback: false,
+			wantVideo:    true,
+			wantErr:      false,
+		},
+		{
+			input:        "video",
+			defaultName:  "gemini-3.6-flash",
+			wantName:     "video",
+			wantMode:     1,
+			wantThink:    0,
+			wantFallback: false,
+			wantVideo:    true,
+			wantErr:      false,
+		},
+		{
 			input:        "unknown-model",
 			defaultName:  "gemini-3.6-flash",
 			wantName:     "gemini-3.6-flash",
@@ -130,6 +151,9 @@ func TestResolve(t *testing.T) {
 			}
 			if res.Fallback != tt.wantFallback {
 				t.Errorf("res.Fallback = %v, want %v", res.Fallback, tt.wantFallback)
+			}
+			if res.IsVideo != tt.wantVideo {
+				t.Errorf("res.IsVideo = %v, want %v", res.IsVideo, tt.wantVideo)
 			}
 		})
 	}

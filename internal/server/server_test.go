@@ -233,3 +233,68 @@ func TestModelHeaders(t *testing.T) {
 		t.Errorf("Expected X-Model-Fallback=true for unknown model, got %q", got)
 	}
 }
+
+func TestVideoEndpoints(t *testing.T) {
+	cfg := config.Default()
+	app := New(cfg, "test")
+	handler := app.Handler()
+
+	// 1. POST /v1/chat/completions with gemini-video
+	bodyVideo := `{"model":"gemini-video","messages":[{"role":"user","content":"Generate a 3 second video of a cat"}]}`
+	req1 := httptest.NewRequest("POST", "/v1/chat/completions", strings.NewReader(bodyVideo))
+	req1.Header.Set("Content-Type", "application/json")
+	rec1 := httptest.NewRecorder()
+	handler.ServeHTTP(rec1, req1)
+
+	if got := rec1.Header().Get("X-Resolved-Model"); got != "gemini-video" {
+		t.Errorf("Expected X-Resolved-Model=gemini-video, got %q", got)
+	}
+	if got := rec1.Header().Get("X-Model-Fallback"); got != "" {
+		t.Errorf("Expected X-Model-Fallback to be empty for gemini-video, got %q", got)
+	}
+
+	// 2. POST /v1/videos valid video model
+	bodyCreate := `{"model":"gemini-video","prompt":"Generate a 3 second video of a cat"}`
+	req2 := httptest.NewRequest("POST", "/v1/videos", strings.NewReader(bodyCreate))
+	req2.Header.Set("Content-Type", "application/json")
+	rec2 := httptest.NewRecorder()
+	handler.ServeHTTP(rec2, req2)
+
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("Expected 200 from POST /v1/videos, got %d: %s", rec2.Code, rec2.Body.String())
+	}
+	var job map[string]any
+	if err := json.Unmarshal(rec2.Body.Bytes(), &job); err != nil {
+		t.Fatalf("Invalid JSON from POST /v1/videos: %v", err)
+	}
+	if job["model"] != "gemini-video" {
+		t.Errorf("Expected job model=gemini-video, got %v", job["model"])
+	}
+	if job["status"] != "queued" && job["status"] != "in_progress" {
+		t.Errorf("Expected queued or in_progress status, got %v", job["status"])
+	}
+
+	// 3. POST /v1/videos with invalid (non-video) model
+	bodyInvalidModel := `{"model":"gemini-3.6-flash","prompt":"Generate a video"}`
+	req3 := httptest.NewRequest("POST", "/v1/videos", strings.NewReader(bodyInvalidModel))
+	req3.Header.Set("Content-Type", "application/json")
+	rec3 := httptest.NewRecorder()
+	handler.ServeHTTP(rec3, req3)
+
+	if rec3.Code != http.StatusBadRequest {
+		t.Errorf("Expected 400 for non-video model in /v1/videos, got %d", rec3.Code)
+	}
+	if !strings.Contains(rec3.Body.String(), "model must be a video model") {
+		t.Errorf("Expected error message 'model must be a video model', got %s", rec3.Body.String())
+	}
+
+	// 4. GET /v1/videos/{id} non-existent
+	req4 := httptest.NewRequest("GET", "/v1/videos/non_existent_12345", nil)
+	rec4 := httptest.NewRecorder()
+	handler.ServeHTTP(rec4, req4)
+
+	if rec4.Code != http.StatusNotFound {
+		t.Errorf("Expected 404 for unknown video id, got %d", rec4.Code)
+	}
+}
+

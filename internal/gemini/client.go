@@ -34,6 +34,7 @@ type ModelOptions struct {
 	ThinkMode   int
 	ModelHeader string
 	Extra       map[int]any
+	IsVideo     bool
 }
 
 type Client struct {
@@ -216,11 +217,15 @@ func (c *Client) Generate(prompt string, opt ModelOptions, fileRefs []string) (s
 	extra[59] = reqUUID
 
 	modelHdr, effectiveMode := c.resolveModelHeader(opt, reqUUID)
-	bodyStr := BuildBody(prompt, effectiveMode, opt.ThinkMode, fileRefs, extra, cfg)
+	bodyStr := BuildBody(prompt, effectiveMode, opt.ThinkMode, fileRefs, extra, cfg, opt.IsVideo)
 	reqURL := BuildURL(cfg, c.CurrentBL())
 	headers := c.buildHeaders()
 	headers.Set(HeaderUUIDJspb, fmt.Sprintf(`["%s",1]`, reqUUID))
-	if modelHdr != "" {
+	if opt.IsVideo {
+		headers.Set(ModelHeaderKey, BuildVideoHeader(reqUUID, c.CurrentBL()))
+		headers.Set(HeaderJspb89, "[0]")
+		headers.Set(HeaderJspb90, "[0,0,0]")
+	} else if modelHdr != "" {
 		headers.Set(ModelHeaderKey, modelHdr)
 		headers.Set(HeaderJspb89, "[0]")
 		headers.Set(HeaderJspb90, "[0,0,0]")
@@ -247,8 +252,11 @@ func (c *Client) Generate(prompt string, opt ModelOptions, fileRefs []string) (s
 					blRefreshed = true
 					if _, changed, blErr := c.UpdateBLIfNeeded(); blErr == nil && changed {
 						c.Logf("BL auto-updated, retrying request")
-						bodyStr = BuildBody(prompt, effectiveMode, opt.ThinkMode, fileRefs, extra, cfg)
+						bodyStr = BuildBody(prompt, effectiveMode, opt.ThinkMode, fileRefs, extra, cfg, opt.IsVideo)
 						reqURL = BuildURL(cfg, c.CurrentBL())
+						if opt.IsVideo {
+							headers.Set(ModelHeaderKey, BuildVideoHeader(reqUUID, c.CurrentBL()))
+						}
 						attempt-- // retry without consuming an attempt
 						continue
 					}
@@ -299,11 +307,15 @@ func (c *Client) GenerateStream(prompt string, opt ModelOptions, fileRefs []stri
 	extra[59] = reqUUID
 
 	modelHdr, effectiveMode := c.resolveModelHeader(opt, reqUUID)
-	bodyStr := BuildBody(prompt, effectiveMode, opt.ThinkMode, fileRefs, extra, cfg)
+	bodyStr := BuildBody(prompt, effectiveMode, opt.ThinkMode, fileRefs, extra, cfg, opt.IsVideo)
 	reqURL := BuildURL(cfg, c.CurrentBL())
 	headers := c.buildHeaders()
 	headers.Set(HeaderUUIDJspb, fmt.Sprintf(`["%s",1]`, reqUUID))
-	if modelHdr != "" {
+	if opt.IsVideo {
+		headers.Set(ModelHeaderKey, BuildVideoHeader(reqUUID, c.CurrentBL()))
+		headers.Set(HeaderJspb89, "[0]")
+		headers.Set(HeaderJspb90, "[0,0,0]")
+	} else if modelHdr != "" {
 		headers.Set(ModelHeaderKey, modelHdr)
 		headers.Set(HeaderJspb89, "[0]")
 		headers.Set(HeaderJspb90, "[0,0,0]")
@@ -333,8 +345,11 @@ func (c *Client) GenerateStream(prompt string, opt ModelOptions, fileRefs []stri
 					blRefreshed = true
 					if _, changed, blErr := c.UpdateBLIfNeeded(); blErr == nil && changed {
 						c.Logf("BL auto-updated, retrying stream request")
-						bodyStr = BuildBody(prompt, effectiveMode, opt.ThinkMode, fileRefs, extra, cfg)
+						bodyStr = BuildBody(prompt, effectiveMode, opt.ThinkMode, fileRefs, extra, cfg, opt.IsVideo)
 						reqURL = BuildURL(cfg, c.CurrentBL())
+						if opt.IsVideo {
+							headers.Set(ModelHeaderKey, BuildVideoHeader(reqUUID, c.CurrentBL()))
+						}
 						attempt-- // retry without consuming an attempt
 						continue
 					}

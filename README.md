@@ -184,6 +184,8 @@ Supports Google native API endpoints:
 | `gemini-3.1-pro`                 | Advanced math & code (needs Pro cookie)      | ~12k chars      |
 | `gemini-auto`                    | Auto model selection                         | varies          |
 | `gemini-flash-lite`              | Fastest answers, lightweight                 | ~10k chars      |
+| `gemini-video`                   | Video generation (Omni Flash, async)         | video response  |
+| `video`                          | Alias for gemini-video                       | video response  |
 
 ### Thinking Depth
 

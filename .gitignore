@@ -22,8 +22,14 @@ go.work
 
 # Compiled binary
 gemini-web2api
+gweb2api
 
-# Auth credentials
+# Auth credentials & runtime files
 gemini-auth.json
+cookie.txt
+*.cookie
+data/
+__pycache__/
+*.db
 
 .ignore/
