@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-var reBL = regexp.MustCompile(`boq_assistant-bard-web-server_\d+\.\d+_p\d+`)
+var reBL = regexp.MustCompile(`boq_(?:assistant-bard-web-server|gemini-web-uiserver)_\d+\.\d+_p\d+`)
 
 // FetchLatestBL fetches the latest BL identifier from the Gemini frontend page.
 // It issues the GET through the provided Requester so proxy/TLS configuration
