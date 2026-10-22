@@ -10,7 +10,10 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -169,12 +172,35 @@ func HandleVideoItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(parts) > 1 && parts[1] == "content" {
+		filePath := fmt.Sprintf("/tmp/momo_videos/%s.mp4", id)
+		_ = os.MkdirAll("/tmp/momo_videos", 0755)
+
+		// Check if file already exists on disk
+		if fi, err := os.Stat(filePath); err == nil && fi.Size() > 100*1024 {
+			w.Header().Set("Content-Type", "video/mp4")
+			http.ServeFile(w, r, filePath)
+			return
+		}
+
+		// If job has conversation ID, trigger download
+		convID := strings.TrimPrefix(j.ConvID, "c_")
+		if convID != "" {
+			cmd := exec.Command("python3", "/home/ubuntu/momo-video-pipeline/gemini_downloader.py", convID, filePath)
+			if err := cmd.Run(); err == nil {
+				if fi, err := os.Stat(filePath); err == nil && fi.Size() > 100*1024 {
+					w.Header().Set("Content-Type", "video/mp4")
+					http.ServeFile(w, r, filePath)
+					return
+				}
+			}
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"error": map[string]string{
-				"message": "video binary content not available via API; use conversation_id to download from Gemini Web UI",
-				"type":    "not_implemented",
+				"message": "video binary content not ready or render in progress; retry in 15 seconds",
+				"type":    "not_ready",
 			},
 		})
 		return
