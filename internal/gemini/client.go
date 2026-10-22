@@ -7,12 +7,15 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/ikhsan3adi/gemini-web2api/internal/config"
 )
+
+var reXSRF = regexp.MustCompile(`\["xsrf","([^"]+)"`)
 
 type UpstreamError struct {
 	Status int
@@ -188,10 +191,11 @@ func (c *Client) triageStatus(resp *http.Response) error {
 		}
 	}
 	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
 		return &UpstreamError{
 			Status: resp.StatusCode,
 			Kind:   "http",
-			Msg:    fmt.Sprintf("upstream HTTP %d", resp.StatusCode),
+			Msg:    fmt.Sprintf("upstream HTTP %d: %s", resp.StatusCode, string(b)),
 		}
 	}
 	return nil
@@ -239,7 +243,12 @@ func (c *Client) Generate(prompt string, opt ModelOptions, fileRefs []string) (G
 	blRefreshed := false
 	var lastErr error
 
-	for attempt := 0; attempt < c.Cfg.RetryAttempts; attempt++ {
+	maxAttempts := c.Cfg.RetryAttempts
+	if total := c.Cookies.TotalAccounts(); total > maxAttempts {
+		maxAttempts = total
+	}
+
+	for attempt := 0; attempt < maxAttempts; attempt++ {
 		req, err := http.NewRequest("POST", reqURL, strings.NewReader(bodyStr))
 		if err != nil {
 			return GenerateResult{}, err
@@ -251,11 +260,29 @@ func (c *Client) Generate(prompt string, opt ModelOptions, fileRefs []string) (G
 			lastErr = &UpstreamError{Kind: "transport", Msg: err.Error()}
 		} else {
 			if err := c.triageStatus(resp); err != nil {
-				_ = resp.Body.Close()
+				// Check if upstream 400 returned a fresh XSRF token
+				if resp.StatusCode == http.StatusBadRequest {
+					bodyBytes, _ := io.ReadAll(resp.Body)
+					_ = resp.Body.Close()
+					if m := reXSRF.FindSubmatch(bodyBytes); len(m) > 1 {
+						freshXSRF := string(m[1])
+						c.Logf("[xsrf] Upstream 400 provided fresh XSRF token, retrying...")
+						cfg.XSRFToken = freshXSRF
+						bodyStr = BuildBody(prompt, effectiveMode, opt.ThinkMode, fileRefs, extra, cfg, opt.IsVideo)
+						attempt-- // retry with fresh xsrf
+						continue
+					}
+				} else {
+					_ = resp.Body.Close()
+				}
+
 				if resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusFound || resp.StatusCode == http.StatusForbidden {
 					c.Cookies.MarkFailed(cookieInfo.Cookie, 15*time.Minute)
-					if c.Cookies.TotalAccounts() > 1 {
+					if c.Cookies.TotalAccounts() > 1 && attempt < maxAttempts-1 {
 						cookieInfo, _ = c.Cookies.Load()
+						cfg.XSRFToken = cookieInfo.XSRFToken
+						cfg.AuthUser = cookieInfo.AuthUser
+						bodyStr = BuildBody(prompt, effectiveMode, opt.ThinkMode, fileRefs, extra, cfg, opt.IsVideo)
 						headers = c.buildHeaders()
 						if opt.IsVideo {
 							headers.Set(ModelHeaderKey, BuildVideoHeader(reqUUID, c.CurrentBL()))
@@ -266,6 +293,7 @@ func (c *Client) Generate(prompt string, opt ModelOptions, fileRefs []string) (G
 							headers.Set(HeaderJspb89, "[0]")
 							headers.Set(HeaderJspb90, "[0,0,0]")
 						}
+						continue
 					}
 				}
 				// 405 = BL expired. Refresh once and retry without consuming an attempt.
@@ -298,11 +326,38 @@ func (c *Client) Generate(prompt string, opt ModelOptions, fileRefs []string) (G
 						}
 					} else {
 						textLower := strings.ToLower(parsed.Text)
-						if strings.Contains(textLower, "getting a lot of requests") || strings.Contains(textLower, "usage limit reached") || strings.Contains(textLower, "can't create it right now") {
+						isQuotaOrRefusal := false
+						if opt.IsVideo {
+							if strings.Contains(textLower, "can't") ||
+								strings.Contains(textLower, "cant") ||
+								strings.Contains(textLower, "cannot") ||
+								strings.Contains(textLower, "limit") ||
+								strings.Contains(textLower, "signed out") ||
+								strings.Contains(textLower, "sign in") ||
+								strings.Contains(textLower, "not available") ||
+								strings.Contains(textLower, "tidak dapat") ||
+								strings.Contains(textLower, "tidak bisa") ||
+								strings.Contains(textLower, "search for images") ||
+								(!strings.Contains(textLower, "generating") && !strings.Contains(textLower, "membuat video") && !strings.Contains(textLower, "video anda")) {
+								isQuotaOrRefusal = true
+							}
+						} else {
+							if strings.Contains(textLower, "getting a lot of requests") ||
+								strings.Contains(textLower, "usage limit reached") ||
+								strings.Contains(textLower, "limit resets") ||
+								strings.Contains(textLower, "can't create it right now") {
+								isQuotaOrRefusal = true
+							}
+						}
+
+						if isQuotaOrRefusal {
 							c.Cookies.MarkFailed(cookieInfo.Cookie, 15*time.Minute)
-							if c.Cookies.TotalAccounts() > 1 && attempt < c.Cfg.RetryAttempts-1 {
-								c.Logf("[cookie-pool] Account quota limit reached, falling over to next account...")
+							if c.Cookies.TotalAccounts() > 1 && attempt < maxAttempts-1 {
+								c.Logf("[cookie-pool] Account quota/feature limit reached, falling over to next account (%d/%d)...", attempt+1, maxAttempts)
 								cookieInfo, _ = c.Cookies.Load()
+								cfg.XSRFToken = cookieInfo.XSRFToken
+								cfg.AuthUser = cookieInfo.AuthUser
+								bodyStr = BuildBody(prompt, effectiveMode, opt.ThinkMode, fileRefs, extra, cfg, opt.IsVideo)
 								headers = c.buildHeaders()
 								if opt.IsVideo {
 									headers.Set(ModelHeaderKey, BuildVideoHeader(reqUUID, c.CurrentBL()))
@@ -314,16 +369,16 @@ func (c *Client) Generate(prompt string, opt ModelOptions, fileRefs []string) (G
 									headers.Set(HeaderJspb90, "[0,0,0]")
 								}
 								continue
-								}
-								}
-								return GenerateResult{Text: parsed.Text, ConversationID: parsed.ConversationID}, nil
+							}
+						}
+						return GenerateResult{Text: parsed.Text, ConversationID: parsed.ConversationID}, nil
 					}
 				}
 			}
 		}
 
-		if attempt < c.Cfg.RetryAttempts-1 {
-			c.Logf("Retry %d/%d: %v", attempt+1, c.Cfg.RetryAttempts, lastErr)
+		if attempt < maxAttempts-1 {
+			c.Logf("Retry %d/%d: %v", attempt+1, maxAttempts, lastErr)
 			time.Sleep(time.Duration(c.Cfg.RetryDelaySec) * time.Second)
 		}
 	}
