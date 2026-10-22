@@ -10,7 +10,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -30,8 +29,7 @@ type VideoJob struct {
 	Response  string `json:"response,omitempty"`
 	Error     string `json:"error,omitempty"`
 
-	MP4  []byte `json:"-"`
-	Mime string `json:"-"`
+	ConvID    string `json:"conversation_id,omitempty"`
 }
 
 var (
@@ -129,7 +127,7 @@ func HandleCreateVideo(gem *gemini.Client, w http.ResponseWriter, r *http.Reques
 		}
 
 		// Route video requests through the same StreamGenerate path as text
-		respText, err := gem.Generate(j.Prompt, opt, nil)
+		genResult, err := gem.Generate(j.Prompt, opt, nil)
 		videoJobsMu.Lock()
 		defer videoJobsMu.Unlock()
 		if err != nil {
@@ -138,7 +136,8 @@ func HandleCreateVideo(gem *gemini.Client, w http.ResponseWriter, r *http.Reques
 			return
 		}
 		j.Status = "completed"
-		j.Response = respText
+		j.Response = genResult.Text
+		j.ConvID = genResult.ConversationID
 	}()
 
 	w.Header().Set("Content-Type", "application/json")
@@ -170,29 +169,14 @@ func HandleVideoItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(parts) > 1 && parts[1] == "content" {
-		videoJobsMu.Lock()
-		status := j.Status
-		mp4 := j.MP4
-		mime := j.Mime
-		videoJobsMu.Unlock()
-
-		if status != "completed" || len(mp4) == 0 {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusNotFound)
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"error": map[string]string{
-					"message": fmt.Sprintf("video not ready (status=%s)", status),
-					"type":    "not_found",
-				},
-			})
-			return
-		}
-		if mime == "" {
-			mime = "video/mp4"
-		}
-		w.Header().Set("Content-Type", mime)
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(mp4)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error": map[string]string{
+				"message": "video binary content not available via API; use conversation_id to download from Gemini Web UI",
+				"type":    "not_implemented",
+			},
+		})
 		return
 	}
 

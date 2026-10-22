@@ -197,7 +197,12 @@ func (c *Client) triageStatus(resp *http.Response) error {
 	return nil
 }
 
-func (c *Client) Generate(prompt string, opt ModelOptions, fileRefs []string) (string, error) {
+type GenerateResult struct {
+	Text           string
+	ConversationID string
+}
+
+func (c *Client) Generate(prompt string, opt ModelOptions, fileRefs []string) (GenerateResult, error) {
 	c.EnsureModelsDiscovered()
 
 	cookieInfo, _ := c.Cookies.Load()
@@ -237,7 +242,7 @@ func (c *Client) Generate(prompt string, opt ModelOptions, fileRefs []string) (s
 	for attempt := 0; attempt < c.Cfg.RetryAttempts; attempt++ {
 		req, err := http.NewRequest("POST", reqURL, strings.NewReader(bodyStr))
 		if err != nil {
-			return "", err
+			return GenerateResult{}, err
 		}
 		req.Header = headers.Clone()
 
@@ -247,7 +252,7 @@ func (c *Client) Generate(prompt string, opt ModelOptions, fileRefs []string) (s
 		} else {
 			if err := c.triageStatus(resp); err != nil {
 				_ = resp.Body.Close()
-				if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusFound || resp.StatusCode == http.StatusForbidden {
+				if resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusFound || resp.StatusCode == http.StatusForbidden {
 					c.Cookies.MarkFailed(cookieInfo.Cookie, 15*time.Minute)
 					if c.Cookies.TotalAccounts() > 1 {
 						cookieInfo, _ = c.Cookies.Load()
@@ -284,11 +289,15 @@ func (c *Client) Generate(prompt string, opt ModelOptions, fileRefs []string) (s
 				if err != nil {
 					lastErr = &UpstreamError{Kind: "transport", Msg: err.Error()}
 				} else {
-					text, err := ExtractResponseText(string(rawBytes))
-					if err != nil {
-						lastErr = &UpstreamError{Kind: "bard", Msg: err.Error()}
+					parsed := ExtractResponse(string(rawBytes))
+					if parsed.Text == "" {
+						if code, ok := IsBardError(string(rawBytes)); ok {
+							lastErr = &UpstreamError{Kind: "bard", Msg: fmt.Sprintf("gemini upstream rejected request: BardErrorInfo [%s]", code)}
+						} else {
+							lastErr = &UpstreamError{Kind: "bard", Msg: "empty response from upstream"}
+						}
 					} else {
-						textLower := strings.ToLower(text)
+						textLower := strings.ToLower(parsed.Text)
 						if strings.Contains(textLower, "getting a lot of requests") || strings.Contains(textLower, "usage limit reached") || strings.Contains(textLower, "can't create it right now") {
 							c.Cookies.MarkFailed(cookieInfo.Cookie, 15*time.Minute)
 							if c.Cookies.TotalAccounts() > 1 && attempt < c.Cfg.RetryAttempts-1 {
@@ -305,9 +314,9 @@ func (c *Client) Generate(prompt string, opt ModelOptions, fileRefs []string) (s
 									headers.Set(HeaderJspb90, "[0,0,0]")
 								}
 								continue
-							}
-						}
-						return text, nil
+								}
+								}
+								return GenerateResult{Text: parsed.Text, ConversationID: parsed.ConversationID}, nil
 					}
 				}
 			}
@@ -319,7 +328,7 @@ func (c *Client) Generate(prompt string, opt ModelOptions, fileRefs []string) (s
 		}
 	}
 
-	return "", lastErr
+	return GenerateResult{}, lastErr
 }
 
 func (c *Client) GenerateStream(prompt string, opt ModelOptions, fileRefs []string, emit func(string) error) error {

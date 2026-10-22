@@ -92,21 +92,88 @@ func IsBardError(raw string) (string, bool) {
 	return "", false
 }
 
-func ExtractResponseText(raw string) (string, error) {
-	if code, ok := IsBardError(raw); ok {
-		return "", fmt.Errorf("gemini upstream rejected request: BardErrorInfo [%s]", code)
-	}
+// ParseResult holds the extracted text and optional conversation ID from a Gemini response.
+type ParseResult struct {
+	Text           string
+	ConversationID string
+}
 
-	var lastText string
+func ExtractResponseText(raw string) (string, error) {
+	r := ExtractResponse(raw)
+	if r.Text == "" {
+		if code, ok := IsBardError(raw); ok {
+			return "", fmt.Errorf("gemini upstream rejected request: BardErrorInfo [%s]", code)
+		}
+	}
+	return r.Text, nil
+}
+
+// ExtractResponse parses the full Gemini StreamGenerate response,
+// extracting both the text content and the conversation ID.
+func ExtractResponse(raw string) ParseResult {
+	var result ParseResult
+
 	lines := strings.Split(raw, "\n")
 	for _, line := range lines {
+		// Extract conversation ID from inner[1] = [conv_id, resp_id]
+		if result.ConversationID == "" {
+			result.ConversationID = extractConversationID(line)
+		}
+
 		texts := ExtractTextsFromLine(line)
 		for _, t := range texts {
-			if len(t) > len(lastText) {
-				lastText = t
+			if len(t) > len(result.Text) {
+				result.Text = t
 			}
 		}
 	}
 
-	return CleanText(lastText, true), nil
+	result.Text = CleanText(result.Text, true)
+	return result
+}
+
+// extractConversationID tries to pull the conversation ID from a wrb.fr response line.
+// The Gemini response structure is: [[wrb.fr, ..., innerJSON, ...], ...]
+// where innerJSON contains: [null, [conversation_id, response_id], ...]
+func extractConversationID(line string) string {
+	if !strings.Contains(line, `"wrb.fr"`) || len(line) < 30 {
+		return ""
+	}
+
+	var arr []any
+	if err := json.Unmarshal([]byte(line), &arr); err != nil || len(arr) == 0 {
+		return ""
+	}
+
+	firstElem, ok := arr[0].([]any)
+	if !ok || len(firstElem) < 3 {
+		return ""
+	}
+
+	innerStr, ok := firstElem[2].(string)
+	if !ok || len(innerStr) < 10 {
+		return ""
+	}
+
+	var inner []any
+	if err := json.Unmarshal([]byte(innerStr), &inner); err != nil {
+		return ""
+	}
+
+	// inner[1] should be [conversation_id, response_id]
+	if len(inner) < 2 || inner[1] == nil {
+		return ""
+	}
+
+	pair, ok := inner[1].([]any)
+	if !ok || len(pair) < 1 {
+		return ""
+	}
+
+	convID, ok := pair[0].(string)
+	if !ok || convID == "" {
+		return ""
+	}
+
+	return convID
 }
